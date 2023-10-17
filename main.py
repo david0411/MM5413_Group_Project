@@ -198,5 +198,5 @@ class LightGCN(nn.Module):
         return users_emb, pos_emb, neg_emb, userEmb0,  posEmb0, negEmb0
 
 
-lightGCN = LightGCN(train, n_users, n_items, n_layers, latent_dim)
+lightGCN = LightGCN(train_df, n_users, n_items, n_layers, latent_dim)
 print("Size of Learnable Embedding : ", list(lightGCN.parameters())[0].size())
