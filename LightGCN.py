@@ -1,5 +1,7 @@
 import scipy.sparse as sp
 import torch.nn as nn
+import numpy as np
+import torch
 
 
 class LightGCN(nn.Module):
@@ -11,35 +13,35 @@ class LightGCN(nn.Module):
         self.n_layers = n_layers
         self.latent_dim = latent_dim
         self.init_embedding()
-        self.norm_adj_mat_sparse_tensor = self.get_A_tilda()
+        self.norm_adj_mat_sparse_tensor = self.get_a_tilda()
 
     def init_embedding(self):
         self.E0 = nn.Embedding(self.n_users + self.n_items, self.latent_dim)
         nn.init.xavier_uniform_(self.E0.weight)
         self.E0.weight = nn.Parameter(self.E0.weight)
 
-    def get_A_tilda(self):
-        R = sp.dok_matrix((self.n_users, self.n_items), dtype=np.float32)
-        R[self.data['user_idx'], self.data['item_idx']] = 1.0
+    def get_a_tilda(self):
+        r = sp.dok_matrix((self.n_users, self.n_items), dtype=np.float32)
+        r[self.data['user_idx'], self.data['item_idx']] = 1.0
 
         adj_mat = sp.dok_matrix(
             (self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32
         )
         adj_mat = adj_mat.tolil()
-        R = R.tolil()
+        r = r.tolil()
 
-        adj_mat[: n_users, n_users:] = R
-        adj_mat[n_users:, : n_users] = R.T
+        adj_mat[: self.n_users, self.n_users:] = r
+        adj_mat[self.n_users:, : self.n_users] = r.T
         adj_mat = adj_mat.todok()
 
-        rowsum = np.array(adj_mat.sum(1))
-        d_inv = np.power(rowsum + 1e-9, -0.5).flatten()
+        row_sum = np.array(adj_mat.sum(1))
+        d_inv = np.power(row_sum + 1e-9, -0.5).flatten()
         d_inv[np.isinf(d_inv)] = 0.0
         d_mat_inv = sp.diags(d_inv)
         norm_adj_mat = d_mat_inv.dot(adj_mat)
         norm_adj_mat = norm_adj_mat.dot(d_mat_inv)
 
-        # Below Code is toconvert the dok_matrix to sparse tensor.
+        # Below Code is to convert the dok_matrix to sparse tensor.
 
         norm_adj_mat_coo = norm_adj_mat.tocoo().astype(np.float32)
         values = norm_adj_mat_coo.data
@@ -49,31 +51,31 @@ class LightGCN(nn.Module):
         v = torch.FloatTensor(values)
         shape = norm_adj_mat_coo.shape
 
-        norm_adj_mat_sparse_tensor = torch.sparse.FloatTensor(i, v, torch.Size(shape))
+        norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape))
 
         return norm_adj_mat_sparse_tensor
 
     def propagate_through_layers(self):
         all_layer_embedding = [self.E0.weight]
-        E_lyr = self.E0.weight
+        e_lyr = self.E0.weight
 
         for layer in range(self.n_layers):
-            E_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, E_lyr)
-            all_layer_embedding.append(E_lyr)
+            e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr)
+            all_layer_embedding.append(e_lyr)
 
         all_layer_embedding = torch.stack(all_layer_embedding)
         mean_layer_embedding = torch.mean(all_layer_embedding, axis=0)
 
-        final_user_Embed, final_item_Embed = torch.split(mean_layer_embedding, [n_users, n_items])
-        initial_user_Embed, initial_item_Embed = torch.split(self.E0.weight, [n_users, n_items])
+        final_user_embed, final_item_embed = torch.split(mean_layer_embedding, [self.n_users, self.n_items])
+        initial_user_embed, initial_item_embed = torch.split(self.E0.weight, [self.n_users, self.n_items])
 
-        return final_user_Embed, final_item_Embed, initial_user_Embed, initial_item_Embed
+        return final_user_embed, final_item_embed, initial_user_embed, initial_item_embed
 
     def forward(self, users, pos_items, neg_items):
-        final_user_Embed, final_item_Embed, initial_user_Embed, initial_item_Embed = self.propagate_through_layers()
+        final_user_embed, final_item_embed, initial_user_embed, initial_item_embed = self.propagate_through_layers()
 
-        users_emb, pos_emb, neg_emb = final_user_Embed[users], final_item_Embed[pos_items], final_item_Embed[neg_items]
-        userEmb0, posEmb0, negEmb0 = initial_user_Embed[users], initial_item_Embed[pos_items], initial_item_Embed[
+        users_emb, pos_emb, neg_emb = final_user_embed[users], final_item_embed[pos_items], final_item_embed[neg_items]
+        user_emb0, pos_emb0, neg_emb0 = initial_user_embed[users], initial_item_embed[pos_items], initial_item_embed[
             neg_items]
 
-        return users_emb, pos_emb, neg_emb, userEmb0, posEmb0, negEmb0
+        return users_emb, pos_emb, neg_emb, user_emb0, pos_emb0, neg_emb0
