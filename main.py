@@ -16,11 +16,11 @@ def convert_to_sparse_tensor(dok_mtrx):
     values = dok_mtrx_coo.data
     indices = np.vstack((dok_mtrx_coo.row, dok_mtrx_coo.col))
 
-    i = torch.LongTensor(indices)
-    v = torch.FloatTensor(values)
+    i = torch.LongTensor(indices).cuda()
+    v = torch.FloatTensor(values).cuda()
     shape = dok_mtrx_coo.shape
 
-    dok_mtrx_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape))
+    dok_mtrx_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).cuda()
 
     return dok_mtrx_sparse_tensor
 
@@ -29,9 +29,9 @@ def get_metrics(user_embed_wts, item_embed_wts, n_users, n_items, train_data, te
     user_Embedding = nn.Embedding(user_embed_wts.size()[0], user_embed_wts.size()[1], _weight=user_embed_wts)
     item_Embedding = nn.Embedding(item_embed_wts.size()[0], item_embed_wts.size()[1], _weight=item_embed_wts)
 
-    test_user_ids = torch.LongTensor(test_data['user_idx'].unique())
+    test_user_ids = torch.LongTensor(test_data['user_idx'].unique()).cuda()
 
-    relevance_score = torch.matmul(user_embed_wts, torch.transpose(item_embed_wts, 0, 1))
+    relevance_score = torch.matmul(user_embed_wts, torch.transpose(item_embed_wts, 0, 1)).cuda()
 
     R = sp.dok_matrix((n_users, n_items), dtype=np.float32)
     R[train_data['user_idx'], train_data['item_idx']] = 1.0
@@ -40,12 +40,12 @@ def get_metrics(user_embed_wts, item_embed_wts, n_users, n_items, train_data, te
     R_tensor_dense = R_tensor.to_dense()
 
     R_tensor_dense = R_tensor_dense * (-np.inf)
-    R_tensor_dense = torch.nan_to_num(R_tensor_dense, nan=0.0)
+    R_tensor_dense = torch.nan_to_num(R_tensor_dense, nan=0.0).cuda()
 
     relevance_score = relevance_score + R_tensor_dense
 
     topk_relevance_score = torch.topk(relevance_score, K).values
-    topk_relevance_indices = torch.topk(relevance_score, K).indices
+    topk_relevance_indices = torch.topk(relevance_score, K).indices.cpu()
 
     topk_relevance_indices_df = pd.DataFrame(topk_relevance_indices.numpy(),
                                              columns=['top_indx_' + str(x + 1) for x in range(K)])
@@ -97,12 +97,12 @@ def bpr_loss(users, users_emb, pos_emb, neg_emb, userEmb0, posEmb0, negEmb0):
     reg_loss = (1 / 2) * (userEmb0.norm().pow(2) +
                           posEmb0.norm().pow(2) +
                           negEmb0.norm().pow(2)) / float(len(users))
-    pos_scores = torch.mul(users_emb, pos_emb)
-    pos_scores = torch.sum(pos_scores, dim=1)
-    neg_scores = torch.mul(users_emb, neg_emb)
-    neg_scores = torch.sum(neg_scores, dim=1)
+    pos_scores = torch.mul(users_emb, pos_emb).cuda()
+    pos_scores = torch.sum(pos_scores, dim=1).cuda()
+    neg_scores = torch.mul(users_emb, neg_emb).cuda()
+    neg_scores = torch.sum(neg_scores, dim=1).cuda()
 
-    loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+    loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores)).cuda()
 
     return loss, reg_loss
 
@@ -180,7 +180,7 @@ if __name__ == '__main__':
     test_df['user_idx'] = le_user.transform(test_df['user'].values)
     test_df['item_idx'] = le_item.transform(test_df['item'].values)
 
-    lightGCN = LightGCN(train_df, n_users, n_items, n_layers, latent_dim)
+    lightGCN = LightGCN(train_df, n_users, n_items, n_layers, latent_dim).cuda()
     print("Size of Learnable Embedding : ", list(lightGCN.parameters())[0].size())
 
     optimizer = torch.optim.Adam(lightGCN.parameters(), lr=0.005)

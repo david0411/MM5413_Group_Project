@@ -47,11 +47,11 @@ class LightGCN(nn.Module):
         values = norm_adj_mat_coo.data
         indices = np.vstack((norm_adj_mat_coo.row, norm_adj_mat_coo.col))
 
-        i = torch.LongTensor(indices)
-        v = torch.FloatTensor(values)
+        i = torch.LongTensor(indices).cuda()
+        v = torch.FloatTensor(values).cuda()
         shape = norm_adj_mat_coo.shape
 
-        norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape))
+        norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).cuda()
 
         return norm_adj_mat_sparse_tensor
 
@@ -60,11 +60,11 @@ class LightGCN(nn.Module):
         e_lyr = self.E0.weight
 
         for layer in range(self.n_layers):
-            e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr)
+            e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).cuda()
             all_layer_embedding.append(e_lyr)
 
-        all_layer_embedding = torch.stack(all_layer_embedding)
-        mean_layer_embedding = torch.mean(all_layer_embedding, axis=0)
+        all_layer_embedding = torch.stack(all_layer_embedding).cuda()
+        mean_layer_embedding = torch.mean(all_layer_embedding, axis=0).cuda()
 
         final_user_embed, final_item_embed = torch.split(mean_layer_embedding, [self.n_users, self.n_items])
         initial_user_embed, initial_item_embed = torch.split(self.E0.weight, [self.n_users, self.n_items])
