@@ -6,6 +6,7 @@ import pandas as pd
 import scipy.sparse as sp
 import torch
 import torch.nn as nn
+from pandas import DataFrame
 from sklearn import preprocessing as pp
 from tqdm import tqdm
 from LightGCN import LightGCN
@@ -107,7 +108,7 @@ def bpr_loss(users, users_emb, pos_emb, neg_emb, userEmb0, posEmb0, negEmb0):
     return loss, reg_loss
 
 
-def data_loader(data, batch_size, n_usr, n_itm):
+def data_loader(data: DataFrame, batch_size, n_usr, n_itm):
     interected_items_df = data.groupby('user_idx')['item_idx'].apply(list).reset_index()
 
     def sample_neg(x):
