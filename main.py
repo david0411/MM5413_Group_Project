@@ -140,7 +140,7 @@ def data_loader(data: DataFrame, batch_size, n_usr, n_itm):
 if __name__ == '__main__':
     latent_dim = 64
     n_layers = 3
-    EPOCHS = 30
+    EPOCHS = 1000
     BATCH_SIZE = 1024
     DECAY = 0.0001
     K = 10
