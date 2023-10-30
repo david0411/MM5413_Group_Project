@@ -25,9 +25,7 @@ class LightGCN(nn.Module):
         r = sp.dok_matrix((self.n_users, self.n_items), dtype=np.float32)
         r[self.data['user_idx'], self.data['item_idx']] = 1.0
 
-        adj_mat = sp.dok_matrix(
-            (self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32
-        )
+        adj_mat = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
         adj_mat = adj_mat.tolil()
         r = r.tolil()
 
