@@ -5,8 +5,9 @@ import torch
 
 
 class LightGCN(nn.Module):
-    def __init__(self, data, n_users, n_items, n_layers, latent_dim):
+    def __init__(self, data, n_users, n_items, n_layers, latent_dim, device):
         super(LightGCN, self).__init__()
+        self.device = device
         self.data = data
         self.n_users = n_users
         self.n_items = n_items
@@ -47,11 +48,16 @@ class LightGCN(nn.Module):
         values = norm_adj_mat_coo.data
         indices = np.vstack((norm_adj_mat_coo.row, norm_adj_mat_coo.col))
 
-        i = torch.LongTensor(indices).cuda()
-        v = torch.FloatTensor(values).cuda()
-        shape = norm_adj_mat_coo.shape
-
-        norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).cuda()
+        if self.device == 'cuda':
+            i = torch.LongTensor(indices).cuda()
+            v = torch.FloatTensor(values).cuda()
+            shape = norm_adj_mat_coo.shape
+            norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).cuda()
+        else:
+            i = torch.LongTensor(indices)
+            v = torch.FloatTensor(values)
+            shape = norm_adj_mat_coo.shape
+            norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape))
 
         return norm_adj_mat_sparse_tensor
 
@@ -59,12 +65,18 @@ class LightGCN(nn.Module):
         all_layer_embedding = [self.E0.weight]
         e_lyr = self.E0.weight
 
-        for layer in range(self.n_layers):
-            e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).cuda()
-            all_layer_embedding.append(e_lyr)
-
-        all_layer_embedding = torch.stack(all_layer_embedding).cuda()
-        mean_layer_embedding = torch.mean(all_layer_embedding, axis=0).cuda()
+        if self.device == 'cuda':
+            for layer in range(self.n_layers):
+                e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).cuda()
+                all_layer_embedding.append(e_lyr)
+            all_layer_embedding = torch.stack(all_layer_embedding).cuda()
+            mean_layer_embedding = torch.mean(all_layer_embedding, axis=0).cuda()
+        else:
+            for layer in range(self.n_layers):
+                e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr)
+                all_layer_embedding.append(e_lyr)
+            all_layer_embedding = torch.stack(all_layer_embedding)
+            mean_layer_embedding = torch.mean(all_layer_embedding, axis=0)
 
         final_user_embed, final_item_embed = torch.split(mean_layer_embedding, [self.n_users, self.n_items])
         initial_user_embed, initial_item_embed = torch.split(self.E0.weight, [self.n_users, self.n_items])
