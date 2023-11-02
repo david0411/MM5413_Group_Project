@@ -160,7 +160,7 @@ if __name__ == '__main__':
     for i in range(3):
         latent_dim = 64
         n_layers = 3
-        EPOCHS = 3
+        EPOCHS = 100
         BATCH_SIZE = 1024
         DECAY = 0.005
         K = 10
@@ -234,7 +234,8 @@ if __name__ == '__main__':
             lightGCN = LightGCN(train_df, n_users_train, n_items_train, n_layers, latent_dim, device)
         print("Size of Learnable Embedding:", list(lightGCN.parameters())[0].size())
 
-        optimizer = torch.optim.Adam(lightGCN.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(lightGCN.parameters(), lr=1e-2)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1)
 
         for epoch in tqdm(range(EPOCHS)):
             n_batch = int(len(train_df) / BATCH_SIZE)
@@ -298,6 +299,7 @@ if __name__ == '__main__':
                 mf_loss_list_valid.append(mf_loss_valid.item())
                 reg_loss_list_valid.append(reg_loss_valid.item())
 
+            scheduler.step()
             train_end_time = time.time()
             train_time = train_end_time - train_start_time
             lightGCN.eval()
