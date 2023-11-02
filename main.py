@@ -162,7 +162,7 @@ if __name__ == '__main__':
         n_layers = 3
         EPOCHS = 100
         BATCH_SIZE = 1024
-        DECAY = 0.005
+        DECAY = 0.1
         K = 10
         seed_torch()
         loss_list_epoch_train = []
@@ -198,12 +198,13 @@ if __name__ == '__main__':
             test_df = pd.DataFrame(test_df, columns=columns_name)
             valid_df = pd.DataFrame(valid_df, columns=columns_name)
         if i == 2:
-            train_df = pd.read_csv("Data/Set3/douban_500k.csv")
-            train_df, test_df = train_test_split(train_df.values, test_size=0.2, random_state=1)
-            test_df, valid_df = train_test_split(test_df, test_size=0.5, random_state=1)
-            train_df = pd.DataFrame(train_df, columns=columns_name)
-            test_df = pd.DataFrame(test_df, columns=columns_name)
-            valid_df = pd.DataFrame(valid_df, columns=columns_name)
+            exit()
+            # train_df = pd.read_csv("Data/Set3/douban_500k.csv")
+            # train_df, test_df = train_test_split(train_df.values, test_size=0.2, random_state=1)
+            # test_df, valid_df = train_test_split(test_df, test_size=0.5, random_state=1)
+            # train_df = pd.DataFrame(train_df, columns=columns_name)
+            # test_df = pd.DataFrame(test_df, columns=columns_name)
+            # valid_df = pd.DataFrame(valid_df, columns=columns_name)
         le_user_train = pp.LabelEncoder()
         le_item_train = pp.LabelEncoder()
         le_user_valid = pp.LabelEncoder()
