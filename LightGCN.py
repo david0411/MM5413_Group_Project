@@ -68,13 +68,13 @@ class LightGCN(nn.Module):
                 e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).cuda()
                 all_layer_embedding.append(e_lyr)
             all_layer_embedding = torch.stack(all_layer_embedding).cuda()
-            mean_layer_embedding = torch.mean(all_layer_embedding, axis=0).cuda()
+            mean_layer_embedding = torch.mean(all_layer_embedding, dim=0).cuda()
         else:
             for layer in range(self.n_layers):
                 e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr)
                 all_layer_embedding.append(e_lyr)
             all_layer_embedding = torch.stack(all_layer_embedding)
-            mean_layer_embedding = torch.mean(all_layer_embedding, axis=0)
+            mean_layer_embedding = torch.mean(all_layer_embedding, dim=0)
 
         final_user_embed, final_item_embed = torch.split(mean_layer_embedding, [self.n_users, self.n_items])
         initial_user_embed, initial_item_embed = torch.split(self.E0.weight, [self.n_users, self.n_items])
