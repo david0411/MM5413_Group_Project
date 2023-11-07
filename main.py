@@ -115,10 +115,30 @@ def data_loader(data: DataFrame, batch_size, n_usr, n_itm):
     users.sort()
     users_df = pd.DataFrame(users, columns=['users'])
     interacted_items_df = pd.merge(interacted_items_df, users_df, how='right', left_on='user_idx', right_on='users')
+    interacted_items_df.dropna()
     pos_items = interacted_items_df['item_idx'].apply(lambda x: random.choice(x)).values
     neg_items = interacted_items_df['item_idx'].apply(lambda x: sample_neg(x)).values
     return list(users), list(pos_items), list(neg_items)
 
+
+def data_loader2(data: DataFrame, n_usr, n_itm):
+    interacted_items_df = data.groupby('user_idx')['item_idx'].apply(list).reset_index()
+
+    def sample_neg(x):
+        while True:
+            neg_id = random.randint(0, n_itm - 1)
+            if neg_id not in x:
+                return neg_id
+
+    indices = [x for x in range(n_usr)]
+    users = random.sample(indices, n_usr)
+    users.sort()
+    users_df = pd.DataFrame(users, columns=['users'])
+    interacted_items_df = pd.merge(interacted_items_df, users_df, how='left', left_on='user_idx', right_on='users')
+    interacted_items_df.dropna()
+    pos_items = interacted_items_df['item_idx'].apply(lambda x: random.choice(x)).values
+    neg_items = interacted_items_df['item_idx'].apply(lambda x: sample_neg(x)).values
+    return list(users), list(pos_items), list(neg_items)
 
 def seed_torch(seed=1029):
     random.seed(seed)
@@ -207,8 +227,8 @@ if __name__ == '__main__':
         test_df['item_idx'] = le_item_train.transform(test_df['item'].values)
 
         valid_df = valid_df[(valid_df['user'].isin(train_user)) & (valid_df['item'].isin(train_item))]
-        valid_df['user_idx'] = le_user_valid.fit_transform(valid_df['user'].values)
-        valid_df['item_idx'] = le_item_valid.fit_transform(valid_df['item'].values)
+        valid_df['user_idx'] = le_user_train.transform(valid_df['user'].values)
+        valid_df['item_idx'] = le_item_train.transform(valid_df['item'].values)
         n_users_valid = valid_df['user_idx'].nunique()
         n_items_valid = valid_df['item_idx'].nunique()
 
@@ -278,7 +298,7 @@ if __name__ == '__main__':
                     lightGCN.propagate_through_layers())
 
                 users_valid, pos_items_valid, neg_items_valid = (
-                    data_loader(valid_df, BATCH_SIZE, n_users_valid, n_items_valid))
+                    data_loader2(valid_df, n_users_valid, n_items_valid))
                 if mode == 'bpr':
                     users_emb_valid, pos_emb_valid, neg_emb_valid, userEmb0_valid, posEmb0_valid, negEmb0_valid = (
                         lightGCN.forward(users_valid, pos_items_valid, neg_items_valid, mode))
