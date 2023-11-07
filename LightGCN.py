@@ -46,16 +46,10 @@ class LightGCN(nn.Module):
         values = norm_adj_mat_coo.data
         indices = np.vstack((norm_adj_mat_coo.row, norm_adj_mat_coo.col))
 
-        if self.device == 'cuda':
-            i = torch.LongTensor(indices).cuda()
-            v = torch.FloatTensor(values).cuda()
-            shape = norm_adj_mat_coo.shape
-            norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).cuda()
-        else:
-            i = torch.LongTensor(indices)
-            v = torch.FloatTensor(values)
-            shape = norm_adj_mat_coo.shape
-            norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape))
+        i = torch.LongTensor(indices).to(self.device)
+        v = torch.FloatTensor(values).to(self.device)
+        shape = norm_adj_mat_coo.shape
+        norm_adj_mat_sparse_tensor = torch.sparse_coo_tensor(i, v, torch.Size(shape)).to(self.device)
 
         return norm_adj_mat_sparse_tensor
 
@@ -63,29 +57,34 @@ class LightGCN(nn.Module):
         all_layer_embedding = [self.E0.weight]
         e_lyr = self.E0.weight
 
-        if self.device == 'cuda':
-            for layer in range(self.n_layers):
-                e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).cuda()
-                all_layer_embedding.append(e_lyr)
-            all_layer_embedding = torch.stack(all_layer_embedding).cuda()
-            mean_layer_embedding = torch.mean(all_layer_embedding, dim=0).cuda()
-        else:
-            for layer in range(self.n_layers):
-                e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr)
-                all_layer_embedding.append(e_lyr)
-            all_layer_embedding = torch.stack(all_layer_embedding)
-            mean_layer_embedding = torch.mean(all_layer_embedding, dim=0)
+        for layer in range(self.n_layers):
+            e_lyr = torch.sparse.mm(self.norm_adj_mat_sparse_tensor, e_lyr).to(self.device)
+            all_layer_embedding.append(e_lyr)
+
+        all_layer_embedding = torch.stack(all_layer_embedding).to(self.device)
+        mean_layer_embedding = torch.mean(all_layer_embedding, dim=0).to(self.device)
 
         final_user_embed, final_item_embed = torch.split(mean_layer_embedding, [self.n_users, self.n_items])
         initial_user_embed, initial_item_embed = torch.split(self.E0.weight, [self.n_users, self.n_items])
 
         return final_user_embed, final_item_embed, initial_user_embed, initial_item_embed
 
-    def forward(self, users, pos_items, neg_items):
+    def forward(self, users, pos_items: list, neg_items: list, mode):
         final_user_embed, final_item_embed, initial_user_embed, initial_item_embed = self.propagate_through_layers()
+        if mode == 'bpr':
+            users_emb, pos_emb, neg_emb = (final_user_embed[users],
+                                           final_item_embed[pos_items],
+                                           final_item_embed[neg_items])
 
-        users_emb, pos_emb, neg_emb = final_user_embed[users], final_item_embed[pos_items], final_item_embed[neg_items]
-        user_emb0, pos_emb0, neg_emb0 = initial_user_embed[users], initial_item_embed[pos_items], initial_item_embed[
-            neg_items]
+            user_emb0, pos_emb0, neg_emb0 = (initial_user_embed[users],
+                                             initial_item_embed[pos_items],
+                                             initial_item_embed[neg_items])
 
-        return users_emb, pos_emb, neg_emb, user_emb0, pos_emb0, neg_emb0
+            return users_emb, pos_emb, neg_emb, user_emb0, pos_emb0, neg_emb0
+        else:
+            items = pos_items + neg_items
+            users_emb, item_emb = final_user_embed[users], final_item_embed[items]
+            user_emb0, item_emb0 = initial_user_embed[users], initial_item_embed[items]
+
+            return users_emb, item_emb, user_emb0, item_emb0
+
