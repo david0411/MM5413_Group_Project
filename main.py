@@ -164,10 +164,11 @@ if __name__ == '__main__':
         mode = 'bpr'  # bpr or mse
         latent_dim = 64
         n_layers = 3
-        EPOCHS = 300
+        EPOCHS = 30
         BATCH_SIZE = 1024
         DECAY = 1e-4
         K = 10
+        lr = 0.5
         seed_torch()
         loss_list_epoch_train = []
         mf_loss_list_epoch_train = []
@@ -235,7 +236,7 @@ if __name__ == '__main__':
         lightGCN = LightGCN(train_df, n_users_train, n_items_train, n_layers, latent_dim, device).to(device)
         print("Size of Learnable Embedding:", list(lightGCN.parameters())[0].size())
 
-        optimizer = torch.optim.Adam(lightGCN.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(lightGCN.parameters(), lr=lr)
         # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1)
 
         for epoch in tqdm(range(EPOCHS)):
@@ -361,15 +362,15 @@ if __name__ == '__main__':
         epoch_list = [(i + 1) for i in range(EPOCHS)]
 
         # Accuracy data
-        # plt.plot(epoch_list, recall_list, label='Recall')
-        # plt.plot(epoch_list, precision_list, label='Precision')
-        # plt.plot(epoch_list, ndcg_list, label='NDCG')
-        # plt.plot(epoch_list, map_list, label='MAP')
-        # plt.xlabel('Epoch')
-        # plt.ylabel('Metrics')
-        # plt.legend()
-        # plt.title("Accuracy")
-        # plt.show()
+        plt.plot(epoch_list, recall_list, label='Recall')
+        plt.plot(epoch_list, precision_list, label='Precision')
+        plt.plot(epoch_list, ndcg_list, label='NDCG')
+        plt.plot(epoch_list, map_list, label='MAP')
+        plt.xlabel('Epoch')
+        plt.ylabel('Metrics')
+        plt.legend()
+        plt.title("Accuracy")
+        plt.show()
 
         # Training Loss plot
         # plt.plot(epoch_list, loss_list_epoch_train, label='Total Training Loss')
