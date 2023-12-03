@@ -69,22 +69,13 @@ class LightGCN(nn.Module):
 
         return final_user_embed, final_item_embed, initial_user_embed, initial_item_embed
 
-    def forward(self, users, pos_items: list, neg_items: list, mode):
+    def forward(self, users, pos_items: list, neg_items: list):
         final_user_embed, final_item_embed, initial_user_embed, initial_item_embed = self.propagate_through_layers()
-        if mode == 'bpr':
-            users_emb, pos_emb, neg_emb = (final_user_embed[users],
-                                           final_item_embed[pos_items],
-                                           final_item_embed[neg_items])
+        users_emb, pos_emb, neg_emb = (final_user_embed[users],
+                                       final_item_embed[pos_items],
+                                       final_item_embed[neg_items])
+        user_emb0, pos_emb0, neg_emb0 = (initial_user_embed[users],
+                                         initial_item_embed[pos_items],
+                                         initial_item_embed[neg_items])
 
-            user_emb0, pos_emb0, neg_emb0 = (initial_user_embed[users],
-                                             initial_item_embed[pos_items],
-                                             initial_item_embed[neg_items])
-
-            return users_emb, pos_emb, neg_emb, user_emb0, pos_emb0, neg_emb0
-        else:
-            items = pos_items + neg_items
-            users_emb, item_emb = final_user_embed[users], final_item_embed[items]
-            user_emb0, item_emb0 = initial_user_embed[users], initial_item_embed[items]
-
-            return users_emb, item_emb, user_emb0, item_emb0
-
+        return users_emb, pos_emb, neg_emb, user_emb0, pos_emb0, neg_emb0

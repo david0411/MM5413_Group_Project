@@ -1,5 +1,6 @@
 import random
 import os
+import sys
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -149,26 +150,20 @@ def seed_torch(seed=1029):
     torch.backends.cudnn.deterministic = True
 
 
-def mse_loss(users, item_emb, itemEmb0):
-    mse_loss = torch.sum(torch.square(torch.subtract(item_emb, itemEmb0))) / len(users)
-    print(mse_loss)
-    return mse_loss
-
-
 if __name__ == '__main__':
-    # recall_j_layer_set1 = []
-    # recall_j_layer_set2 = []
-    # recall_j_layer_set3 = []
-    # for j in range(4):
     for i in range(3):
-        mode = 'bpr'  # bpr or mse
         latent_dim = 64
         n_layers = 3
         EPOCHS = 30
-        BATCH_SIZE = 1024
-        DECAY = 1e-4
+        BATCH_SIZE = 64
+        DECAY = 0.001
         K = 10
-        lr = 0.5
+        lr = 0.01
+        # For Grid-search
+        # latent_dim = int(sys.argv[1])
+        # BATCH_SIZE = int(sys.argv[2])
+        # DECAY = float(sys.argv[3])
+        # lr = float(sys.argv[4])
         seed_torch()
         loss_list_epoch_train = []
         mf_loss_list_epoch_train = []
@@ -186,15 +181,22 @@ if __name__ == '__main__':
         print('Dataset:{}'.format(i + 1))
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print('Using {} device'.format(device))
-        print('Parameters: Hidden Layers:{}, EPOCHS:{}, Decay:{}'.format(
-            n_layers, EPOCHS, DECAY))
+        # For Grid-search
+        # with open('Result/result.txt', 'a') as f:
+        #     f.write('Parameters: Embed:{}, Layers:{}, EPOCHS:{}, Batch:{}, Decay:{}, LR:{}, '.format(
+        #         latent_dim, n_layers, EPOCHS, BATCH_SIZE, DECAY, lr))
+        print('Parameters: Embed:{}, Layers:{}, EPOCHS:{}, Batch:{}, Decay:{}, LR:{}'.format(
+            latent_dim, n_layers, EPOCHS, BATCH_SIZE, DECAY, lr))
 
         pd.set_option('display.max_colwidth', None)
         columns_name = ['user', 'item', 'ratings']
         if i == 0:
             train_df = pd.read_csv("Data/Set1/train.txt")
+            train_df = train_df[train_df['ratings'] >= 3]
             valid_df = pd.read_csv("Data/Set1/valid.txt")
+            valid_df = valid_df[valid_df['ratings'] >= 3]
             test_df = pd.read_csv("Data/Set1/test.txt")
+            test_df = test_df[test_df['ratings'] >= 3]
         if i == 1:
             train_df = pd.read_csv("Data/Set2/ml_100k_full_set.csv")
             train_df, test_df = train_test_split(train_df.values, test_size=0.2, random_state=1)
@@ -237,7 +239,6 @@ if __name__ == '__main__':
         print("Size of Learnable Embedding:", list(lightGCN.parameters())[0].size())
 
         optimizer = torch.optim.Adam(lightGCN.parameters(), lr=lr)
-        # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=1)
 
         for epoch in tqdm(range(EPOCHS)):
             n_batch = int(len(train_df) / BATCH_SIZE)
@@ -258,39 +259,28 @@ if __name__ == '__main__':
 
                 users_train, pos_items_train, neg_items_train = (
                     data_loader(train_df, BATCH_SIZE, n_users_train, n_items_train))
-                if mode == 'bpr':
-                    users_emb_train, pos_emb_train, neg_emb_train, userEmb0_train, posEmb0_train, negEmb0_train = (
-                        lightGCN.forward(users_train, pos_items_train, neg_items_train, mode))
+                users_emb_train, pos_emb_train, neg_emb_train, userEmb0_train, posEmb0_train, negEmb0_train = (
+                    lightGCN.forward(users_train, pos_items_train, neg_items_train))
 
-                    mf_loss_train, reg_loss_train = bpr_loss(
-                        users_train,
-                        users_emb_train,
-                        pos_emb_train,
-                        neg_emb_train,
-                        userEmb0_train,
-                        posEmb0_train,
-                        negEmb0_train)
+                mf_loss_train, reg_loss_train = bpr_loss(
+                    users_train,
+                    users_emb_train,
+                    pos_emb_train,
+                    neg_emb_train,
+                    userEmb0_train,
+                    posEmb0_train,
+                    negEmb0_train)
 
-                    reg_loss_train = DECAY * reg_loss_train
-                    final_loss_train = mf_loss_train + reg_loss_train
+                reg_loss_train = DECAY * reg_loss_train
+                final_loss_train = mf_loss_train + reg_loss_train
 
-                    final_loss_train.backward()
-                    optimizer.step()
+                final_loss_train.backward()
+                optimizer.step()
 
-                    final_loss_list_train.append(final_loss_train.item())
-                    mf_loss_list_train.append(mf_loss_train.item())
-                    reg_loss_list_train.append(reg_loss_train.item())
-                else:
-                    users_emb_train, item_emb_train, userEmb0_train, itemEmb0_train = (
-                        lightGCN.forward(users_train, pos_items_train, neg_items_train, mode))
+                final_loss_list_train.append(final_loss_train.item())
+                mf_loss_list_train.append(mf_loss_train.item())
+                reg_loss_list_train.append(reg_loss_train.item())
 
-                    loss_train = mse_loss(users_train, item_emb_train, itemEmb0_train)
-
-                    loss_train.backward()
-                    optimizer.step()
-                    final_loss_list_train.append(loss_train.item())
-
-            # scheduler.step()
             train_end_time = time.time()
             train_time = train_end_time - train_start_time
             lightGCN.eval()
@@ -300,32 +290,24 @@ if __name__ == '__main__':
 
                 users_valid, pos_items_valid, neg_items_valid = (
                     data_loader2(valid_df, n_users_valid, n_items_valid))
-                if mode == 'bpr':
-                    users_emb_valid, pos_emb_valid, neg_emb_valid, userEmb0_valid, posEmb0_valid, negEmb0_valid = (
-                        lightGCN.forward(users_valid, pos_items_valid, neg_items_valid, mode))
+                users_emb_valid, pos_emb_valid, neg_emb_valid, userEmb0_valid, posEmb0_valid, negEmb0_valid = (
+                    lightGCN.forward(users_valid, pos_items_valid, neg_items_valid))
 
-                    mf_loss_valid, reg_loss_valid = bpr_loss(
-                        users_valid,
-                        users_emb_valid,
-                        pos_emb_valid,
-                        neg_emb_valid,
-                        userEmb0_valid,
-                        posEmb0_valid,
-                        negEmb0_valid)
+                mf_loss_valid, reg_loss_valid = bpr_loss(
+                    users_valid,
+                    users_emb_valid,
+                    pos_emb_valid,
+                    neg_emb_valid,
+                    userEmb0_valid,
+                    posEmb0_valid,
+                    negEmb0_valid)
 
-                    reg_loss_valid = DECAY * reg_loss_valid
-                    final_loss_valid = mf_loss_valid + reg_loss_valid
+                reg_loss_valid = DECAY * reg_loss_valid
+                final_loss_valid = mf_loss_valid + reg_loss_valid
 
-                    final_loss_list_valid.append(final_loss_valid.item())
-                    mf_loss_list_valid.append(mf_loss_valid.item())
-                    reg_loss_list_valid.append(reg_loss_valid.item())
-                else:
-                    users_emb_valid, item_emb_valid, userEmb0_valid, itemEmb0_valid, = (
-                        lightGCN.forward(users_valid, pos_items_valid, neg_items_valid, mode))
-
-                    loss_valid = mse_loss(users_valid, item_emb_valid, itemEmb0_valid)
-
-                    final_loss_list_valid.append(loss_valid.item())
+                final_loss_list_valid.append(final_loss_valid.item())
+                mf_loss_list_valid.append(mf_loss_valid.item())
+                reg_loss_list_valid.append(reg_loss_valid.item())
 
                 test_topK_recall, test_topK_precision, test_topK_ndcg, test_topK_map = get_metrics(final_user_Embed,
                                                                                                    final_item_Embed,
@@ -334,7 +316,15 @@ if __name__ == '__main__':
                                                                                                    train_df,
                                                                                                    test_df,
                                                                                                    K)
-
+                # For Grid-search
+                # if epoch == 0:
+                #     with open('Result/result.txt', 'a') as f:
+                #         f.write('Recall0:{}, Precision0:{}, NDCG0:{}, Map0:{}, '.format(
+                #                 test_topK_recall, test_topK_precision, test_topK_ndcg, test_topK_map))
+                # if epoch == EPOCHS-1:
+                #     with open('Result/result.txt', 'a') as f:
+                #         f.write('Recall1:{}, Precision1:{}, NDCG1:{}, Map1:{}\n'.format(
+                #             test_topK_recall, test_topK_precision, test_topK_ndcg, test_topK_map))
             if test_topK_ndcg > best_ndcg:
                 best_ndcg = test_topK_ndcg
                 torch.save(final_user_Embed, 'final_user_Embed.pt')
@@ -361,38 +351,39 @@ if __name__ == '__main__':
 
         epoch_list = [(i + 1) for i in range(EPOCHS)]
 
-        # Accuracy data
+        print("Initial Recall:{}, Final Recall:{}\n".format(recall_list[0], recall_list[-1]))
+
+        # Accuracy data Recall
         plt.plot(epoch_list, recall_list, label='Recall')
+        plt.xlabel('Epoch')
+        plt.ylabel('Metrics')
+        plt.legend()
+        plt.title("Recall")
+        plt.show()
+
+        # Accuracy data Precision
         plt.plot(epoch_list, precision_list, label='Precision')
+        plt.xlabel('Epoch')
+        plt.ylabel('Metrics')
+        plt.legend()
+        plt.title("Precision")
+        plt.show()
+
+        # Accuracy data NDCG
         plt.plot(epoch_list, ndcg_list, label='NDCG')
+        plt.xlabel('Epoch')
+        plt.ylabel('Metrics')
+        plt.legend()
+        plt.title("NDCG")
+        plt.show()
+
+        # Accuracy data MAP
         plt.plot(epoch_list, map_list, label='MAP')
         plt.xlabel('Epoch')
         plt.ylabel('Metrics')
         plt.legend()
-        plt.title("Accuracy")
+        plt.title("MAP")
         plt.show()
-
-        # Training Loss plot
-        # plt.plot(epoch_list, loss_list_epoch_train, label='Total Training Loss')
-        # plt.plot(epoch_list, mf_loss_list_epoch_train, label='MF Training Loss')
-        # plt.plot(epoch_list, reg_loss_list_epoch_train, label='Reg Training Loss')
-        # plt.xlabel('Epoch')
-        # plt.ylabel('Loss')
-        # plt.legend()
-        # plt.title("Training Loss")
-        # plt.show()
-
-        # Validation Loss plot
-        # plt.plot(epoch_list, loss_list_epoch_valid, label='Total Validating Loss')
-        # plt.plot(epoch_list, mf_loss_list_epoch_valid, label='MF Validating Loss')
-        # plt.plot(epoch_list, reg_loss_list_epoch_valid, label='Reg Validating Loss')
-        # plt.xlabel('Epoch')
-        # plt.ylabel('Loss')
-        # plt.legend()
-        # plt.title("Validation Loss")
-        # plt.show()
-        print(loss_list_epoch_train)
-        print(loss_list_epoch_valid)
 
         # Training and Validation Loss plot
         plt.plot(epoch_list, loss_list_epoch_train, label='Total Training Loss')
@@ -413,19 +404,3 @@ if __name__ == '__main__':
         print("Valid Data Loss -> ", loss_list_epoch_valid[-1])
         print()
 
-        # if i == 0:
-        #     recall_j_layer_set1.append(recall_list[-1])
-        # if i == 1:
-        #     recall_j_layer_set2.append(recall_list[-1])
-        # if i == 2:
-        #     recall_j_layer_set3.append(recall_list[-1])
-
-# Recall for different layers
-# plt.plot([0, 1, 2, 3], recall_j_layer_set1, label='Recall')
-# plt.plot([0, 1, 2, 3], recall_j_layer_set2, label='Recall')
-# plt.plot([0, 1, 2, 3], recall_j_layer_set3, label='Recall')
-# plt.xlabel('Layers')
-# plt.ylabel('Recall')
-# plt.legend()
-# plt.title('Recall by layer')
-# plt.show()
